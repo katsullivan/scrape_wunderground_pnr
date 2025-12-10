@@ -1,244 +1,124 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-"""Module to scrape 5-min personal weather station data from Weather Underground.
-
-Usage is:
->>> python scrape_wunderground.py   STATION    DATE     FREQ
-
-where station is a personal weather station (e.g., KCAJAMES3), date is in the
-format YYYY-MM-DD and FREQ is either 'daily' or '5min' (for daily or 5-minute
-observations, respectively).
-
-Alternatively, each function below can be imported and used in a separate python
-script. Note that a working version of chromedriver must be installed and the absolute
-path to executable has to be updated below ("chromedriver_path").
-
-Zach Perzan, 2021-07-28"""
-
+############version tested in portainer with output to csv
+import subprocess
+import sys
 import time
 from datetime import datetime, timedelta
+import argparse
 
+# -------------------------------
+# Auto-install required packages
+# -------------------------------
+required_packages = [
+    "selenium",
+    "pandas",
+    "numpy",
+    "beautifulsoup4"
+]
+
+for pkg in required_packages:
+    try:
+        __import__(pkg.split("==")[0])
+    except ImportError:
+        print(f"Installing missing package: {pkg}")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
+
+# -------------------------------
+# Imports (after ensuring installed)
+# -------------------------------
 import numpy as np
 import pandas as pd
 from bs4 import BeautifulSoup as BS
 from selenium import webdriver
-import argparse
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 
-# Set the absolute path to chromedriver
-chromedriver_path = '/bin/chromedriver'
+# -------------------------------
+# Selenium driver initialization
+# -------------------------------
+CHROMEDRIVER_PATH = "/usr/bin/chromedriver-linux64/chromedriver"  # Adjust if needed
 
+def init_driver():
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    service = Service(CHROMEDRIVER_PATH)
+    return webdriver.Chrome(service=service, options=options)
 
-def render_page(url):
-    """Given a url, render it with chromedriver and return the html source
-
-    Parameters
-    ----------
-        url : str
-            url to render
-
-    Returns
-    -------
-        r :
-            rendered page source
-    """
-
-    driver = webdriver.Chrome(chromedriver_path)
+def render_page(url, driver):
     driver.get(url)
-    time.sleep(3) # Could potentially decrease the sleep time
-    r = driver.page_source
-    driver.quit()
+    time.sleep(3)
+    return driver.page_source
 
-    return r
+# -------------------------------
+# Scraping functions
+# -------------------------------
+def scrape_wunderground(station, date, driver, freq="5min"):
+    """Scrape only temperature data from Weather Underground."""
+    timespan = "daily" if freq == "5min" else "monthly"
+    url = f"https://www.wunderground.com/dashboard/pws/{station}/table/{date}/{date}/{timespan}"
+    soup = BS(render_page(url, driver), "html.parser")
 
-
-def scrape_wunderground(station, date, freq='5min'):
-    """Given a PWS station ID and date, scrape that day's data from Weather
-    Underground and return it as a dataframe.
-
-    Parameters
-    ----------
-        station : str
-            The personal weather station ID
-        date : str
-            The date for which to acquire data, formatted as 'YYYY-MM-DD'
-        freq : {'5min', 'daily'}
-            Whether to download 5-minute weather observations or daily
-            summaries (average, min and max for each day)
-
-    Returns
-    -------
-        df : dataframe or None
-            A dataframe of weather observations, with index as pd.DateTimeIndex
-            and columns as the observed data
-    """
-
-    # the url for 5-min data is called "daily" on weather underground
-    if freq == '5min':
-        timespan = 'daily'
-    # the url for daily summary data (avg/min/max) is called "monthly" on wunderground
-    elif freq == 'daily':
-        timespan = 'monthly'
-
-    # Render the url and open the page source as BS object
-    url = 'https://www.wunderground.com/dashboard/pws/%s/table/%s/%s/%s' % (station,
-                                                                            date, date,
-                                                                            timespan)
-    r = render_page(url)
-    soup = BS(r, "html.parser",)
-
-    container = soup.find('lib-history-table')
-
-    # Check that lib-history-table is found
+    container = soup.find("lib-history-table")
     if container is None:
-        raise ValueError("could not find lib-history-table in html source for %s" % url)
+        raise RuntimeError("Weather table not found")
 
-    # Get the timestamps and data from two separate 'tbody' tags
-    all_checks = container.find_all('tbody')
-    time_check = all_checks[0]
-    data_check = all_checks[1]
+    time_body, data_body = container.find_all("tbody")
+    time_rows = time_body.find_all("tr")
+    data_rows = data_body.find_all("tr")
 
-    # Iterate through 'tr' tags and get the timestamps
-    hours = []
-    for i in time_check.find_all('tr'):
-        trial = i.get_text()
-        hours.append(trial)
+    timestamps = []
+    temperatures = []
 
-    # For data, locate both value and no-value ("--") classes
-    classes = ['wu-value wu-value-to', 'wu-unit-no-value ng-star-inserted']
+    for t_row, d_row in zip(time_rows, data_rows):
+        time_text = t_row.get_text().strip()
+        temp_span = d_row.find("span")  # First span = Temperature
+        temp_value = temp_span.get_text().strip() if temp_span else "--"
 
-    # Iterate through span tags and get data
-    data = []
-    for i in data_check.find_all('span', class_=classes):
-        trial = i.get_text()
-        data.append(trial)
-
-    columns = {'5min': ['Temperature', 'Dew Point', 'Humidity', 'Wind Speed',
-                        'Wind Gust', 'Pressure', 'Precip. Rate', 'Precip. Accum.'],
-               'daily': ['Temperature_High', 'Temperature_Avg', 'Temperature_Low',
-                         'DewPoint_High', 'DewPoint_Avg', 'DewPoint_Low',
-                         'Humidity_High', 'Humidity_Avg', 'Humidity_Low',
-                         'WindSpeed_High', 'WindSpeed_Avg', 'WindSpeed_Low',
-                         'Pressure_High', 'Pressure_Low', 'Precip_Sum']}
-
-    # Convert NaN values (stings of '--') to np.nan
-    data_nan = [np.nan if x == '--' else x for x in data]
-
-    # Convert list of data to an array
-    data_array = np.array(data_nan, dtype=float)
-    data_array = data_array.reshape(-1, len(columns[freq]))
-
-    # Prepend date to HH:MM strings
-    if freq == '5min':
-        timestamps = ['%s %s' % (date, t) for t in hours]
-    else:
-        timestamps = hours
-
-    # Convert to dataframe
-    df = pd.DataFrame(index=timestamps, data=data_array, columns=columns[freq])
-    df.index = pd.to_datetime(df.index)
-
-    return df
-
-
-def scrape_multiattempt(station, date, attempts=4, wait_time=5.0, freq='5min'):
-    """Try to scrape data from Weather Underground. If there is an error on the
-    first attempt, try again.
-
-    Parameters
-    ----------
-        station : str
-            The personal weather station ID
-        date : str
-            The date for which to acquire data, formatted as 'YYYY-MM-DD'
-        attempts : int, default 4
-            Maximum number of times to try accessing before failuer
-        wait_time : float, default 5.0
-            Amount of time to wait in between attempts
-        freq : {'5min', 'daily'}
-            Whether to download 5-minute weather observations or daily
-            summaries (average, min and max for each day)
-
-    Returns
-    -------
-        df : dataframe or None
-            A dataframe of weather observations, with index as pd.DateTimeIndex
-            and columns as the observed data
-    """
-
-    # Try to download data limited number of attempts
-    for n in range(attempts):
-        try:
-            df = scrape_wunderground(station, date, freq=freq)
-        except:
-            # if unsuccessful, pause and retry
-            time.sleep(wait_time)
+        if temp_value == "--":
+            temp_float = np.nan
         else:
-            # if successful, then break
-            break
-    # If all attempts failed, return empty df
-    else:
-        df = pd.DataFrame()
+            # Keep digits, minus, dot only
+            temp_clean = "".join(c for c in temp_value if c.isdigit() or c in ".-")
+            try:
+                temp_float = float(temp_clean)
+            except ValueError:
+                temp_float = np.nan
 
+        timestamps.append(f"{date} {time_text}" if freq=="5min" else time_text)
+        temperatures.append(temp_float)
+
+    idx = pd.to_datetime(timestamps)
+    df = pd.DataFrame({"Temperature": temperatures}, index=idx)
     return df
 
+def scrape_multiattempt(station, date, driver, freq='5min', attempts=4, wait_time=5.0):
+    for i in range(attempts):
+        try:
+            return scrape_wunderground(station, date, driver, freq)
+        except Exception as e:
+            print(f"Attempt {i+1} failed: {e}")
+            time.sleep(wait_time)
+    return pd.DataFrame()
 
-def scrape_multidate(station, start_date, end_date, freq):
-    """Given a PWS station ID and a start and end date, scrape data from Weather
-        Underground for that date range and return it as a dataframe.
-
-        Parameters
-        ----------
-            station : str
-                The personal weather station ID
-            start_date : str
-                The date for which to begin acquiring data, formatted as 'YYYY-MM-DD'
-            end_date : str
-                The date for which to end acquiring data, formatted as 'YYYY-MM-DD'
-
-        Returns
-        -------
-            df : dataframe or None
-                A dataframe of weather observations, with index as pd.DateTimeIndex
-                and columns as the observed data
-        """
-    # Convert end_date and start_date to datetime types
-    end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
-    start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
-
-    # Calculate time delta
-    delta = end_date - start_date
-
-    # Create list dates and append all days within the start and end date to dates
-    dates = []
-    for i in range(delta.days + 1):
-        day = start_date + timedelta(days=i)
-        dates.append(day)
-    dates = [date.strftime('%Y-%m-%d') for date in dates]
-
-    # Repeat the station name in a list for as many dates are in the date range
-    stations = [station] * len(dates)
-
-    # Scrape wunderground for data from all dates in range and store in list of dateframes
-    df_list = list(map(scrape_multiattempt, stations, dates, freq=freq))
-
-    # Convert list of dataframes to one dataframe
-    df = pd.concat(df_list)
-
-    return df
-
-
+# -------------------------------
+# Main
+# -------------------------------
 if __name__ == "__main__":
-
-    # Parse command-line arguments
-    parser = argparse.ArgumentParser(description='Scrape weather data from Weather Underground')
-    parser.add_argument('station', type=str, help='The personal weather station ID')
-    parser.add_argument('date', type=str, help='The date for which to acquire data, formatted as YYYY-MM-DD')
-    parser.add_argument('freq', type=str, help='Whether to download 5-minute weather observations or '
-                                               'daily summaries (average, min and max for each day)')
+    parser = argparse.ArgumentParser(description="Scrape temperature data from Weather Underground")
+    parser.add_argument("station", type=str, help="The personal weather station ID")
+    parser.add_argument("date", type=str, help="The date for which to acquire data, formatted as YYYY-MM-DD")
+    parser.add_argument("freq", type=str, choices=["5min", "daily"], help="Download 5-minute or daily data")
     args = parser.parse_args()
 
-    df = scrape_multiattempt(args.station, args.date, freq=args.freq)
+    driver = init_driver()
+    try:
+        df = scrape_multiattempt(args.station, args.date, driver, freq=args.freq)
+    finally:
+        driver.quit()
 
-    filename = '%s_%s.csv' % (args.station, args.date)
+    filename = f"{args.station}_{args.date}.csv"
     df.to_csv(filename)
+    print(f"Saved {filename}")
