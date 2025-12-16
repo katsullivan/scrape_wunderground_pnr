@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 ############ version tested in portainer with output to csv
 
@@ -137,46 +138,46 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scrape temperature data from Weather Underground")
     parser.add_argument("station", help="Personal weather station ID")
     group = parser.add_mutually_exclusive_group(required=True)
-	group.add_argument("--date", help="Single date YYYY-MM-DD")
-	group.add_argument("--start-date", help="Start date YYYY-MM-DD")
-	group.add_argument("--date-file", help="Text file with dates (one per line)")
+    group.add_argument("--date", help="Single date YYYY-MM-DD")
+    group.add_argument("--start-date", help="Start date YYYY-MM-DD")
+    group.add_argument("--date-file", help="Text file with dates (one per line)")
 
-	parser.add_argument("--end-date", help="End date YYYY-MM-DD (used with --start-date)")
-	parser.add_argument("--freq", choices=["5min", "daily"], default="5min")
+    parser.add_argument("--end-date", help="End date YYYY-MM-DD (used with --start-date)")
+    parser.add_argument("--freq", choices=["5min", "daily"], default="5min")
     args = parser.parse_args()
 
     driver = init_driver()
-	try:
-    	if args.date_file:
-        	df = scrape_from_date_file(
-            args.station,
-            args.date_file,
-            driver,
-            args.freq
-        )
-        out = f"{args.station}_from_file.csv"
+    try:
+        if args.date_file:
+            df = scrape_from_date_file(
+                args.station,
+                args.date_file,
+                driver,
+                args.freq
+            )
+            out = f"{args.station}_from_file.csv"
 
-    	elif args.start_date:
-        	df = scrape_date_range(
-            args.station,
-            args.start_date,
-            args.end_date,
-            driver,
-            args.freq
-        )
-        	out = f"{args.station}_{args.start_date}_to_{args.end_date}.csv"
+        elif args.start_date:
+            df = scrape_date_range(
+                args.station,
+                args.start_date,
+                args.end_date,
+                driver,
+                args.freq
+            )
+            out = f"{args.station}_{args.start_date}_to_{args.end_date}.csv"
 
-    	else:
-        	df = scrape_multiattempt(
-            args.station,
-            args.date,
-            driver,
-            args.freq
-        )
-        	out = f"{args.station}_{args.date}.csv"
+        else:
+            df = scrape_multiattempt(
+                args.station,
+                args.date,
+                driver,
+                args.freq
+            )
+            out = f"{args.station}_{args.date}.csv"
 
-	finally:
-    driver.quit()
+    finally:
+        driver.quit()
 
-df.to_csv(out)
-print(f"Saved {out}")
+    df.to_csv(out)
+    print(f"Saved {out}")
