@@ -1,12 +1,11 @@
-
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 ############ version tested in portainer with output to csv
 
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import argparse
 
 # -------------------------------
@@ -115,7 +114,6 @@ def scrape_from_date_file(station, date_file, driver, freq):
     dfs = []
     for d in dates:
         try:
-            # Validate format early
             datetime.strptime(d, "%Y-%m-%d")
         except ValueError:
             print(f"Skipping invalid date: {d}")
@@ -135,15 +133,19 @@ def scrape_from_date_file(station, date_file, driver, freq):
 # Main
 # -------------------------------
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Scrape temperature data from Weather Underground")
+    parser = argparse.ArgumentParser(
+        description="Scrape temperature data from Weather Underground"
+    )
     parser.add_argument("station", help="Personal weather station ID")
+
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--date", help="Single date YYYY-MM-DD")
-    group.add_argument("--start-date", help="Start date YYYY-MM-DD")
     group.add_argument("--date-file", help="Text file with dates (one per line)")
+    # group.add_argument("--start-date", help="Start date YYYY-MM-DD")
 
-    parser.add_argument("--end-date", help="End date YYYY-MM-DD (used with --start-date)")
+    # parser.add_argument("--end-date", help="End date YYYY-MM-DD (used with --start-date)")
     parser.add_argument("--freq", choices=["5min", "daily"], default="5min")
+
     args = parser.parse_args()
 
     driver = init_driver()
@@ -156,16 +158,6 @@ if __name__ == "__main__":
                 args.freq
             )
             out = f"{args.station}_from_file.csv"
-
-        elif args.start_date:
-            df = scrape_date_range(
-                args.station,
-                args.start_date,
-                args.end_date,
-                driver,
-                args.freq
-            )
-            out = f"{args.station}_{args.start_date}_to_{args.end_date}.csv"
 
         else:
             df = scrape_multiattempt(
@@ -181,3 +173,4 @@ if __name__ == "__main__":
 
     df.to_csv(out)
     print(f"Saved {out}")
+
