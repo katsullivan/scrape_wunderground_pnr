@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-############version tested in portainer with output to csv
+############version for wsl scrape env
 import subprocess
 import sys
 import time
@@ -37,13 +35,13 @@ from selenium.webdriver.chrome.options import Options
 # -------------------------------
 # Selenium driver initialization
 # -------------------------------
-CHROMEDRIVER_PATH = "/usr/bin/chromedriver-linux64/chromedriver"  # Adjust if needed
+CHROMEDRIVER_PATH = "/usr/bin/chromedriver"  # Adjust if needed
 
 def init_driver():
     options = Options()
+    options.binary_location = "/usr/bin/google-chrome"
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
     service = Service(CHROMEDRIVER_PATH)
     return webdriver.Chrome(service=service, options=options)
 
