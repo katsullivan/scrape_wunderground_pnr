@@ -142,13 +142,13 @@ if __name__ == "__main__":
 	group.add_argument("--date-file", help="Text file with dates (one per line)")
 
 	parser.add_argument("--end-date", help="End date YYYY-MM-DD (used with --start-date)")
-    parser.add_argument("--freq", choices=["5min", "daily"], default="5min")
+	parser.add_argument("--freq", choices=["5min", "daily"], default="5min")
     args = parser.parse_args()
 
     driver = init_driver()
-try:
-    if args.date_file:
-        df = scrape_from_date_file(
+	try:
+    	if args.date_file:
+        	df = scrape_from_date_file(
             args.station,
             args.date_file,
             driver,
@@ -156,26 +156,26 @@ try:
         )
         out = f"{args.station}_from_file.csv"
 
-    elif args.start_date:
-        df = scrape_date_range(
+    	elif args.start_date:
+        	df = scrape_date_range(
             args.station,
             args.start_date,
             args.end_date,
             driver,
             args.freq
         )
-        out = f"{args.station}_{args.start_date}_to_{args.end_date}.csv"
+        	out = f"{args.station}_{args.start_date}_to_{args.end_date}.csv"
 
-    else:
-        df = scrape_multiattempt(
+    	else:
+        	df = scrape_multiattempt(
             args.station,
             args.date,
             driver,
             args.freq
         )
-        out = f"{args.station}_{args.date}.csv"
+        	out = f"{args.station}_{args.date}.csv"
 
-finally:
+	finally:
     driver.quit()
 
 df.to_csv(out)
