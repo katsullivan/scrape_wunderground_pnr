@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 ############ version tested in portainer with output to csv
 
@@ -38,13 +38,16 @@ from selenium.webdriver.chrome.options import Options
 # -------------------------------
 # Selenium setup
 # -------------------------------
-CHROMEDRIVER_PATH = "/usr/bin/chromedriver-linux64/chromedriver"
-
+CHROMEDRIVER_PATH = "/usr/bin/chromedriver"
+CHROME_BINARY= "/usr/bin/google-chrome"
 def init_driver():
     options = Options()
+    options.binary_location=CHROME_BINARY
     options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-GPU")
+    options.add_argument("--WINDOW-SIZE=1920,1080")
     service = Service(CHROMEDRIVER_PATH)
     return webdriver.Chrome(service=service, options=options)
 
